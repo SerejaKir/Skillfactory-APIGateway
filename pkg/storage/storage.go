@@ -3,9 +3,11 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,19 +33,31 @@ type Post struct {
 	Link    string // ссылка на источник
 }
 
-const (
-	host           = "172.16.87.117"
-	portPostges    = 5432
-	userDB         = "sergey"
-	password       = "password"
-	dbnamePostges  = "postgres"
-	collectionName = "newsdb"
-)
+// конфигурация подключения к PostgreSQL
+type sqlPostgres struct {
+	Host           string `json:"host"`
+	PortPostges    int    `json:"portPostges"`
+	UserDB         string `json:"userDB"`
+	Password       string `json:"password"`
+	DBnamePostges  string `json:"dbnamePostges"`
+	CollectionName string `json:"collectionName"`
+}
 
 // Запись в БД новых новостей
 func New() (*DB, error) {
-	os.Setenv("newsdb", "postgres://"+userDB+":"+password+"@"+host+"/"+dbnamePostges)
-	connstr := os.Getenv("newsdb")
+	// Чтение файла schema.sql
+	b, err := ioutil.ReadFile("./sqlPostgres.json")
+	if err != nil {
+		log.Fatalf("не удалось прочитать файл sqlPostgres.json: %v", err)
+	}
+	var sqlParams sqlPostgres
+	err = json.Unmarshal(b, &sqlParams)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	os.Setenv(sqlParams.CollectionName, "postgres://"+sqlParams.UserDB+":"+sqlParams.Password+"@"+sqlParams.Host+"/"+sqlParams.DBnamePostges)
+	connstr := os.Getenv(sqlParams.CollectionName)
 	if connstr == "" {
 		return nil, errors.New("не указано подключение к БД")
 	}

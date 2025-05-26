@@ -7,19 +7,21 @@ import (
 	"net/http"
 	"strconv"
 
+	dbComments "Skillfactory-APIGateway/comments/storage"
 	"Skillfactory-APIGateway/pkg/storage"
 
 	"github.com/gorilla/mux"
 )
 
 type API struct {
-	db *storage.DB
-	r  *mux.Router
+	db         *storage.DB
+	dbComments *dbComments.DB
+	r          *mux.Router
 }
 
 // Конструктор API.
-func New(db *storage.DB) *API {
-	a := API{db: db, r: mux.NewRouter()}
+func New(db *storage.DB, dbComments *dbComments.DB) *API {
+	a := API{db: db, dbComments: dbComments, r: mux.NewRouter()}
 	a.endpoints()
 	return &a
 }
@@ -40,6 +42,11 @@ func (api *API) endpoints() {
 	api.r.HandleFunc("/news/{n}", api.posts).Methods(http.MethodGet, http.MethodOptions)
 	// все публикации
 	api.r.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("./webapp"))))
+
+	// обработчиков комментариев
+	api.r.HandleFunc("/comments", api.commentsHandler).Methods(http.MethodGet, http.MethodOptions)
+	api.r.HandleFunc("/comments/add", api.addCommentHandler).Methods(http.MethodPost, http.MethodOptions)
+	api.r.HandleFunc("/comments/del", api.deletePostHandler).Methods(http.MethodDelete, http.MethodOptions)
 }
 
 func (api *API) posts(w http.ResponseWriter, r *http.Request) {
@@ -108,4 +115,62 @@ func (api *API) newsDetailedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+// commentsHandler, который выводит заданное кол-во новостей.
+// Требуемое количество публикаций указывается в пути запроса
+func (api *API) commentsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	parseId := r.URL.Query().Get("news_id")
+
+	newsId, err := strconv.Atoi(parseId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	comments, err := api.dbComments.AllComments(newsId)
+	err = json.NewEncoder(w).Encode(comments)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// Добавление комментария
+func (api *API) addCommentHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	var c dbComments.Comment
+	err := json.NewDecoder(r.Body).Decode(&c)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+
+	err = api.dbComments.AddComment(c)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.ResponseWriter.WriteHeader(w, http.StatusCreated)
+}
+
+// Удаление комента.
+func (api *API) deletePostHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	var c dbComments.Comment
+	err := json.NewDecoder(r.Body).Decode(&c)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = api.dbComments.DeleteComment(c)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }

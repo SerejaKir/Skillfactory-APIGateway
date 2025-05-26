@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	commentStorege "Skillfactory-APIGateway/comments/storage"
 	"Skillfactory-APIGateway/pkg/api"
 	"Skillfactory-APIGateway/pkg/rss"
 	"Skillfactory-APIGateway/pkg/storage"
@@ -26,7 +27,12 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Pool.Close()
-	api := api.New(db)
+	dbComment, err := commentStorege.New()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dbComment.Pool.Close()
+	api := api.New(db, dbComment)
 
 	// чтение и раскодирование файла конфигурации
 	b, err := ioutil.ReadFile("./config.json")

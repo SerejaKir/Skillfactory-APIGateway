@@ -1,0 +1,8 @@
+{
+    "host"           : "172.16.87.117",
+    "portPostgres"    : 5432,
+    "userDB"         : "sergey",
+    "password"       : "password",
+    "dbnamePostges"  : "postgres",
+    "collectionName" : "newsdb"
+}
