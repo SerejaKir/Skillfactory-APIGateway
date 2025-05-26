@@ -4,5 +4,5 @@
       "https://habr.com/ru/rss/best/daily/?fl=ru",
       "https://cprss.s3.amazonaws.com/golangweekly.com.xml"
    ],
-   "request_period": 5
+   "request_period": 25
 }

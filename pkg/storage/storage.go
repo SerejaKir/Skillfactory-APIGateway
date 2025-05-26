@@ -16,6 +16,12 @@ type DB struct {
 	Pool *pgxpool.Pool
 }
 
+type Pagination struct {
+	NumOfPages int
+	Page       int
+	Limit      int
+}
+
 // Публикация, получаемая из RSS.
 type Post struct {
 	ID      int    // номер записи
@@ -74,20 +80,27 @@ func (db *DB) initSchema() error {
 	return nil
 }
 
+// вставка новой записи
 func (db *DB) StoreNews(news []Post) error {
+	var id int //проверка, что записалось
 	for _, post := range news {
+		//err := db.Pool.QueryRow(context.Background(), `
 		_, err := db.Pool.Exec(context.Background(), `
 		INSERT INTO news(title, content, pub_time, link)
-		VALUES ($1, $2, $3, $4)`,
+		VALUES ($1, $2, $3, $4)
+        RETURNING id`,
 			post.Title,
 			post.Content,
 			post.PubTime,
 			post.Link,
-		)
+		) //.Scan(&id)
 		if err != nil {
 			return err
 		}
+		id++
+		//fmt.Printf("Добавлена новость с ID: %d\n", id)
 	}
+	fmt.Printf("Добавлено %d записи с сайта %s\n", id, news[0].Link)
 	return nil
 }
 
@@ -129,4 +142,105 @@ func (db *DB) Close() {
 	if db.Pool != nil {
 		db.Pool.Close()
 	}
+}
+
+// PostSearchILIKE Поиск по заголовку
+func (db *DB) PostSearchILIKE(pattern string, limit, offset int) ([]Post, Pagination, error) {
+	pattern = "%" + pattern + "%"
+
+	pagination := Pagination{
+		Page:  offset/limit + 1,
+		Limit: limit,
+	}
+	row := db.Pool.QueryRow(context.Background(), "SELECT count(*) FROM news WHERE title ILIKE $1;", pattern)
+	err := row.Scan(&pagination.NumOfPages)
+
+	if pagination.NumOfPages%limit > 0 {
+		pagination.NumOfPages = pagination.NumOfPages/limit + 1
+	} else {
+		pagination.NumOfPages /= limit
+	}
+
+	if err != nil {
+		return nil, Pagination{}, err
+	}
+
+	rows, err := db.Pool.Query(context.Background(), "SELECT * FROM news WHERE title ILIKE $1 ORDER BY pub_time DESC LIMIT $2 OFFSET $3;", pattern, limit, offset)
+	if err != nil {
+		return nil, Pagination{}, err
+	}
+	defer rows.Close()
+	var posts []Post
+	for rows.Next() {
+		var p Post
+		err = rows.Scan(&p.ID, &p.Title, &p.Content, &p.PubTime, &p.Link)
+		if err != nil {
+			return nil, Pagination{}, err
+		}
+		posts = append(posts, p)
+	}
+	return posts, pagination, rows.Err()
+}
+
+// Posts Получение странице с определенным номером
+func (db *DB) Posts(Page int) ([]Post, error) {
+	if Page < 1 {
+		err := errors.New("invalid value - must be greater than zero")
+		return nil, err
+	}
+	rows, err := db.Pool.Query(context.Background(), `
+	SELECT * FROM news
+	ORDER BY pub_time DESC LIMIT 10 OFFSET $1
+	`,
+		Page,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []Post
+	// итерированное по результату выполнения запроса
+	// и сканирование каждой строки в переменную
+	for rows.Next() {
+		var p Post
+		err = rows.Scan(
+			&p.ID,
+			&p.Title,
+			&p.Content,
+			&p.PubTime,
+			&p.Link,
+		)
+		if err != nil {
+			return nil, err
+		}
+		// добавление переменной в массив результатов
+		posts = append(posts, p)
+
+	}
+	// ВАЖНО не забыть проверить rows.Err()
+	return posts, rows.Err()
+}
+
+// PostDetal Получение публикаций по id
+func (db *DB) PostDetal(id int) (Post, error) {
+	if id < 1 {
+		err := errors.New("invalid id - must be greater than zero")
+		return Post{}, err
+	}
+	row := db.Pool.QueryRow(context.Background(), `
+	SELECT * FROM news 
+    WHERE id =$1;
+	`, id)
+	var post Post
+	err := row.Scan(
+		&post.ID,
+		&post.Title,
+		&post.Content,
+		&post.PubTime,
+		&post.Link)
+	if err != nil {
+		return Post{}, err
+	}
+	return post, nil
 }

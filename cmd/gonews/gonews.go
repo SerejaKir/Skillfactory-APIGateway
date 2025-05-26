@@ -51,9 +51,9 @@ func main() {
 	go func() {
 		for posts := range chPosts {
 			db.StoreNews(posts)
-			/*if err != nil {
-				log.Fatal(err)
-			}*/
+			if err != nil {
+				log.Println(err)
+			}
 		}
 	}()
 
