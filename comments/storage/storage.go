@@ -37,7 +37,7 @@ type Comment struct {
 
 // Запись в БД новых новостей
 func New() (*DB, error) {
-	// Чтение файла schema.sql
+	// Чтение конфигурации базы данных файла
 	b, err := ioutil.ReadFile("./sqlPostgres.json")
 	if err != nil {
 		log.Fatalf("не удалось прочитать файл sqlPostgres.json: %v", err)
@@ -51,7 +51,7 @@ func New() (*DB, error) {
 	os.Setenv(sqlParams.CollectionName, "postgres://"+sqlParams.UserDB+":"+sqlParams.Password+"@"+sqlParams.Host+"/"+sqlParams.DBnamePostges)
 	connstr := os.Getenv(sqlParams.CollectionName)
 	if connstr == "" {
-		return nil, errors.New("не указано подключение к БД")
+		return nil, errors.New("не указано подключение к БД комментариев")
 	}
 	pool, err := pgxpool.New(context.Background(), connstr)
 	if err != nil {
@@ -63,7 +63,9 @@ func New() (*DB, error) {
 
 	// Выполнение SQL-скрипта
 	if err := db.initSchema(); err != nil {
-		return nil, fmt.Errorf("ошибка инициализации схемы: %v", err)
+		return nil, fmt.Errorf("ошибка инициализации схемы комментариев: %v", err)
+	} else {
+		fmt.Println("создана БД комментариев")
 	}
 
 	return &db, nil
@@ -71,10 +73,10 @@ func New() (*DB, error) {
 
 // initSchema выполняет SQL-скрипт из файла для инициализации БД
 func (db *DB) initSchema() error {
-	// Чтение файла schema.sql
-	sqlBytes, err := ioutil.ReadFile("./schema.sql")
+	// Чтение файла для создания схемы базы данных
+	sqlBytes, err := ioutil.ReadFile("./schemaComments.sql")
 	if err != nil {
-		return fmt.Errorf("не удалось прочитать файл schema.sql: %v", err)
+		return fmt.Errorf("не удалось прочитать файл schemaComments.sql: %v", err)
 	}
 
 	// Выполнение SQL-скрипта
@@ -82,7 +84,6 @@ func (db *DB) initSchema() error {
 	if err != nil {
 		return fmt.Errorf("ошибка выполнения SQL-скрипта: %v", err)
 	}
-
 	return nil
 }
 
@@ -119,31 +120,6 @@ func (db *DB) AddComment(c Comment) error {
 func (db *DB) DeleteComment(c Comment) error {
 	_, err := db.Pool.Exec(context.Background(),
 		"DELETE FROM comments WHERE id=$1;", c.ID)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// CreateCommentTable Создает таблицу
-func (db *DB) CreateCommentTable() error {
-	_, err := db.Pool.Exec(context.Background(), `
-		CREATE TABLE IF NOT EXISTS comments (
-                id SERIAL PRIMARY KEY,
-                news_id INT,
-                content TEXT NOT NULL DEFAULT 'empty',
-                pubtime BIGINT NOT NULL DEFAULT extract (epoch from now())
-		);
-	`)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// DropCommentTable Удаляет таблицу
-func (db *DB) DropCommentTable() error {
-	_, err := db.Pool.Exec(context.Background(), "DROP TABLE IF EXISTS comments;")
 	if err != nil {
 		return err
 	}

@@ -19,9 +19,10 @@ type DB struct {
 }
 
 type Pagination struct {
-	NumOfPages int
-	Page       int
-	Limit      int
+	NumOfPages int `json:"total_pages"`
+	Page       int `json:"current_page"`
+	Limit      int `json:"items_per_page"`
+	TotalItems int `json:"total_items"`
 }
 
 // Публикация, получаемая из RSS.
@@ -45,7 +46,7 @@ type sqlPostgres struct {
 
 // Запись в БД новых новостей
 func New() (*DB, error) {
-	// Чтение файла schema.sql
+	// Чтение конфигурации базы данных файла
 	b, err := ioutil.ReadFile("./sqlPostgres.json")
 	if err != nil {
 		log.Fatalf("не удалось прочитать файл sqlPostgres.json: %v", err)
@@ -79,7 +80,7 @@ func New() (*DB, error) {
 
 // initSchema выполняет SQL-скрипт из файла для инициализации БД
 func (db *DB) initSchema() error {
-	// Чтение файла schema.sql
+	// Чтение файла для создания схемы базы данных
 	sqlBytes, err := ioutil.ReadFile("./schema.sql")
 	if err != nil {
 		return fmt.Errorf("не удалось прочитать файл schema.sql: %v", err)
@@ -98,7 +99,6 @@ func (db *DB) initSchema() error {
 func (db *DB) StoreNews(news []Post) error {
 	var id int //проверка, что записалось
 	for _, post := range news {
-		//err := db.Pool.QueryRow(context.Background(), `
 		_, err := db.Pool.Exec(context.Background(), `
 		INSERT INTO news(title, content, pub_time, link)
 		VALUES ($1, $2, $3, $4)
@@ -107,12 +107,11 @@ func (db *DB) StoreNews(news []Post) error {
 			post.Content,
 			post.PubTime,
 			post.Link,
-		) //.Scan(&id)
+		)
 		if err != nil {
 			return err
 		}
 		id++
-		//fmt.Printf("Добавлена новость с ID: %d\n", id)
 	}
 	fmt.Printf("Добавлено %d записи с сайта %s\n", id, news[0].Link)
 	return nil
@@ -198,7 +197,7 @@ func (db *DB) PostSearchILIKE(pattern string, limit, offset int) ([]Post, Pagina
 
 // Posts Получение странице с определенным номером
 func (db *DB) Posts(Page int) ([]Post, error) {
-	if Page < 1 {
+	if Page < 0 {
 		err := errors.New("invalid value - must be greater than zero")
 		return nil, err
 	}
