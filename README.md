@@ -5,7 +5,7 @@ Skillfactory
 #### Соединение со свей базой данных PostgreSql можно отредактировать в файле "Skillfactory-APIGateway/cmd/gonews/sqlPostgres.json"
 
 
-#### gateway запускается на localhost:8000
+#### gateway запускается на localhost:80
 
 ### Доступные API , примеры:
 
